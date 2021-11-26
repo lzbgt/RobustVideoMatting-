@@ -17,6 +17,9 @@ import torch
 import urllib
 import traceback
 import uuid
+import requests
+from decouple import config
+import json
 
 logging.info(torch.__version__)
 logging.info(torchvision.__version__)
@@ -50,7 +53,7 @@ class VideoProc(Task):
            vars=('mobilenetv3', 'rvm_mobilenetv3.pth', ),
            name='{}.{}'.format(__name__, 'replace_background')
            )
-def replace_background(self, vpRequest: VideoProcessTaskRequest):
+def replace_background(self, vpRequest: VideoProcessTaskRequest, bearer: str):
     # TODO: avoid same name
     video_url = os.path.basename(vpRequest.video_url)
     bgr_url = os.path.basename(vpRequest.bgr_url)
@@ -93,7 +96,15 @@ def replace_background(self, vpRequest: VideoProcessTaskRequest):
                 # Composite to green background.
                 com = fgr * pha + bgr * (1 - pha)
                 writer.write(com)
-        return {'url': outputname}
+
+        files = {'file': open(outputname, 'rb')}
+        r = requests.post(config('storage_api'), files=files, headers={
+                          'Authorization': bearer})
+        logging.info(f'post ret: {r.text}')
+        if r.status_code != 200:
+            raise TaskError(r.text)
+        r = json.loads(r.text)
+        return {'url': r['url']}
     except Exception as e:
         self.update_state(state=states.FAILURE, meta={
             'url': '',

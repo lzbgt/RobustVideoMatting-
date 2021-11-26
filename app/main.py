@@ -1,16 +1,20 @@
+from fastapi.param_functions import Header
 from starlette.routing import Host
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from app.tasks.video_proc import replace_background
 from app.payloads import VideoProcessTaskRequest, VideoProcessResponse, VideoProcessResult
 from fastapi.openapi.utils import get_openapi
+from app.auth.jwt_bearer import JWTBearer
 import logging
 
 app = FastAPI()
 
 
-@app.post("/tasks", status_code=200)
-async def run_task(request: VideoProcessTaskRequest):
-    task = replace_background.delay(request)
+@app.post("/tasks", dependencies=[Depends(JWTBearer())], status_code=200)
+async def run_task(request: VideoProcessTaskRequest, authorization: str = Header(None)):
+    logging.error(f'auth: {authorization}')
+    task = replace_background.delay(request, authorization)
     return {"task_id": task.id}
 
 
@@ -49,6 +53,14 @@ async def get_status(task_id: str) -> VideoProcessResponse:
         )
 
     return result
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def custom_openapi():
