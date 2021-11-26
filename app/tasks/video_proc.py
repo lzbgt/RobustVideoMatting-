@@ -93,7 +93,6 @@ def replace_background(self, vpRequest: VideoProcessTaskRequest):
                 # Composite to green background.
                 com = fgr * pha + bgr * (1 - pha)
                 writer.write(com)
-
         return {'url': outputname}
     except Exception as e:
         self.update_state(state=states.FAILURE, meta={
@@ -101,6 +100,8 @@ def replace_background(self, vpRequest: VideoProcessTaskRequest):
             'exc_type': type(e).__name__,
             'exc_message': traceback.format_exc(),
         })
+        raise Ignore()
+    finally:
         os.remove(video_url)
         os.remove(bgr_url)
-        raise Ignore()
+        os.remove(outputname)
