@@ -54,22 +54,29 @@ class VideoProc(Task):
            name='{}.{}'.format(__name__, 'replace_background')
            )
 def replace_background(self, vpRequest: VideoProcessTaskRequest, bearer: str):
-    # TODO: avoid same name
-    video_url = os.path.basename(vpRequest.video_url)
-    bgr_url = os.path.basename(vpRequest.bgr_url)
-    _, video_ext = os.path.splitext(video_url)
-    _, bgr_ext = os.path.splitext(bgr_url)
-    basename = uuid.uuid4().hex
-    video_url = f'{basename}{video_ext}'
-    bgr_url = f'{uuid.uuid4().hex}{bgr_ext}'
+    # check local or remote file
     try:
-        uuid.uuid4()
-        urllib.request.urlretrieve(vpRequest.video_url, video_url)
-        urllib.request.urlretrieve(vpRequest.bgr_url, bgr_url)
+        video_url: str
+        bgr_url: str
+        output_path: str
 
-        outputname = f'{basename}_out{video_ext}'
+        _, video_ext = os.path.splitext(vpRequest.video_url)
+        _, bgr_ext = os.path.splitext(vpRequest.bgr_url)
+        output_path = f'{uuid.uuid4().hex}_out{video_ext}'
+        if os.path.exists(vpRequest.video_url) and os.path.exists(vpRequest.bgr_url):
+            # local file
+            video_url = vpRequest.video_url
+            bgr_url = vpRequest.bgr_url
+
+        else:
+            video_url = uuid.uuid4().hex + video_ext
+            bgr_url = f'{uuid.uuid4().hex}{bgr_ext}'
+            # retrive remote files
+            urllib.request.urlretrieve(vpRequest.video_url, video_url)
+            urllib.request.urlretrieve(vpRequest.bgr_url, bgr_url)
+
         reader = VideoReader(video_url, transform=ToTensor())
-        writer = VideoWriter(outputname, frame_rate=30)
+        writer = VideoWriter(output_path, frame_rate=30)
         self.update_state(state=states.RECEIVED, meta={'url': ''})
 
         # probe the video resolution for scaling bgr image
@@ -97,7 +104,7 @@ def replace_background(self, vpRequest: VideoProcessTaskRequest, bearer: str):
                 com = fgr * pha + bgr * (1 - pha)
                 writer.write(com)
 
-        files = {'file': open(outputname, 'rb')}
+        files = {'file': open(output_path, 'rb')}
         r = requests.post(config('storage_api'), files=files, headers={
                           'Authorization': bearer})
         logging.info(f'post ret: {r.text}')
@@ -115,4 +122,4 @@ def replace_background(self, vpRequest: VideoProcessTaskRequest, bearer: str):
     finally:
         os.remove(video_url)
         os.remove(bgr_url)
-        os.remove(outputname)
+        os.remove(output_path)
