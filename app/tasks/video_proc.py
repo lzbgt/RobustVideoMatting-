@@ -20,6 +20,7 @@ import uuid
 import requests
 from decouple import config
 import json
+import threading
 
 logging.info(torch.__version__)
 logging.info(torchvision.__version__)
@@ -29,21 +30,24 @@ class VideoProc(Task):
     """
     abstract class
     """
-    abstract = True
+    model: MattingNetwork = None
+    _lock = threading.Lock()
 
     def __init__(self):
         super().__init__()
-        self.model = None
 
     def __call__(self, *args, **kwargs):
         '''
         avoid multiple loadings of model
         '''
         if not self.model:
-            logging.info('model loading')
-            self.model = MattingNetwork(
-                self.vars[0]).eval().cuda()  # or "resnet50"
-            self.model.load_state_dict(torch.load(self.vars[1]))
+            self._lock.acquire()
+            if not self.model:
+                logging.info('model loading')
+                self.model = MattingNetwork(
+                    self.vars[0]).eval().cuda()  # or "resnet50"
+                self.model.load_state_dict(torch.load(self.vars[1]))
+            self._lock.release()
         return self.run(*args, **kwargs)
 
 
@@ -99,7 +103,8 @@ def replace_background(self, vpRequest: VideoProcessTaskRequest, bearer: str):
             # RGB tensor normalized to 0 ~ 1.
             for src in DataLoader(reader):
                 # Cycle the recurrent states.
-                fgr, pha, *rec = self.model(src.cuda(), *rec, downsample_ratio)
+                fgr, pha, *rec = self.model(src.cuda(),
+                                            *rec, downsample_ratio)
                 # Composite to green background.
                 com = fgr * pha + bgr * (1 - pha)
                 writer.write(com)

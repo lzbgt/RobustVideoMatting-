@@ -1,4 +1,5 @@
 from celery import Celery
+from decouple import config
 
 
 class CeleryConfig:
@@ -10,8 +11,10 @@ class CeleryConfig:
                              "application/x-python-serialize"]
 
 
+MQTT_URL = config('mqtt')
+
 celery = Celery('tasks', backend='rpc://',
-                broker='pyamqp://guest:Huayuan@2020@localhost//')
+                broker=f'pyamqp://{MQTT_URL}//')
 
 celery.config_from_object(CeleryConfig())
 
