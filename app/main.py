@@ -10,8 +10,9 @@ from app.utils.file import aiosave
 import logging
 import uuid
 import os
+from decouple import config
 
-app = FastAPI()
+app = FastAPI(root_path=config('root_path'), default='/')
 
 
 @app.post("/tasks/cloud", dependencies=[Depends(JWTBearer())], status_code=200,
