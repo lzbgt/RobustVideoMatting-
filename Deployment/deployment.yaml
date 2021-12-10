@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rvmapp
+  labels:
+    app: rvmapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rvmapp
+  template:
+    metadata:
+      labels:
+        app: rvmapp
+    spec:
+      containers:
+        - name: rvmapp
+          image: lzbgt/rvmapp:cuda
+          imagePullPolicy: Never
+          resources:
+            limits:
+              nvidia.com/gpu: 0
+          ports:
+            - containerPort: 5000
+      volumes:
+        - name: rvmapp-config
+          configMap:
+            name: rvmapp-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rvmapp
+  labels:
+    app: rvmapp
+spec:
+  #type: NodePort
+  ports:
+    - port: 80
+      targetPort: 5000
+      protocol: TCP
+      name: http
+  selector:
+    app: rvmapp
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: rvmapp
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: PathPrefix("/gpu/rvmapp")
+      kind: Rule
+      services:
+        - name: rvmapp
+          port: 80
+      middlewares:
+        - name: cors-header
+        - name: rvmapp-stripprefix
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: rvmapp-stripprefix
+spec:
+  stripPrefix:
+    prefixes:
+      - /gpu/rvmapp
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: cors-header
+spec:
+  headers:
+    accessControlAllowMethods: ["*"]
+    accessControlAllowOriginList: ["*"]
+    accessControlMaxAge: 300
+    addVaryHeader: true
